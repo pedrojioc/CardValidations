@@ -87,24 +87,46 @@ class CreditCard
     @cards
   end
 
-  def self.validCreditCard(number, type = nil)
+  #Verify if the card is valid
+  def self.validCreditCard number, type = nil
     response = {
-      'valid' => false,
-      'number' => '',
-      'type' => '',
+      :valid => false,
+      :number => nil,
+      :type => nil,
     }
     number = number.gsub(/[^0-9]/, '')
 
     unless type != nil
       type = self.creditCardType(number)
     end
-    puts type
+    if @cards.key?(type) and self.validCard(number, type)
+      response[:valid] = true
+      response[:number] = number
+      response[:type] = type
+    end
+    return response
+  end
+
+  #Check if the cvc number is valid according to the type of card
+  def self.validCvc cvc, type
+    self.is_numeric?(cvc) and @cards.key?(type) and self.validCvcLength(cvc, type)
+  end
+
+  def self.validDate year, month
+    month = month.rjust(2, '0')
+    return false if year.scan(/^20\d\d$/).length == 0
+    return false if month.scan(/^(0[1-9]|1[0-2])$/).length == 0
+    return false if year.to_i <= Time.now.year and month.to_i < Time.now.month
+
+    return true
+
   end
 
   #Protected methods
   protected
+
   #Return the credit card type
-  def self.creditCardType(number)
+  def self.creditCardType number
     @cards.each do |key, value|
       matches = number.scan(value['pattern'])
       if matches != nil and matches.length > 0
@@ -113,8 +135,56 @@ class CreditCard
     end
     return nil
   end
+  #End return the credit card type
+
+  def self.validCard number, type
+    self.validPattern(number, type) and self.validLength(number, type) and self.validLuhn(number, type)
+  end
+
+  def self.validPattern number, type
+    number.scan(@cards[type]['pattern'])
+  end
+
+  #Valida la longitud del numero de la tarjeta, segun franquicia
+  def self.validLength number, type
+    @cards[type]['length'].each do |key, value|
+      return true if number.length == value
+    end
+    return false
+  end
+
+  #Valida la longitud del cvc, segun franquicia
+  def self.validCvcLength cvc, type
+    @cards[type]['cvcLength'].each do |key, value|
+      return true if cvc.length == value
+    end
+    return false
+  end
+
+  def self.validLuhn number, type
+    if not @cards[type]['luhn']
+      return true
+    else
+      return self.luhnCheck(number)
+    end
+  end
+
+  #Check if the number is valid, using the luhn algorithm
+  def self.luhnCheck(number)
+    number
+      .chars       # Break into individual digits
+      .map(&:to_i) # map each character by calling #to_i on it
+      .reverse     # Start from the end
+      .map.with_index { |x, i| i.odd? ? x * 2 : x } # Double every other digit
+      .map { |x| x > 9 ? x - 9 : x }  # If > 9, subtract 9 (same as adding the digits)
+      .inject(0, :+) % 10 == 0        # Check if multiple of 10
+  end
+  #Retorna true si un string contiene solo caracteres numericos
+  def self.is_numeric?(str)
+    str.scan(/\D/).empty?
+  end
 
 end
 
-puts CreditCard.validCreditCard('4927704633109664')
+#puts CreditCard.validDate('2017', '06')
 #puts CreditCard.creditCardType('55927109664')
